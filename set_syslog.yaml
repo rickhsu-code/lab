@@ -1,1 +1,34 @@
+---
+  - name: set syslog server ios
+    hosts: ios
+    gather_facts: no
+    tasks:
 
+    - name: set syslog server ios
+      cisco.ios.ios_command:
+        commands:
+        - configure terminal
+        - command: logging host {{ syslog_server }}
+      ignore_errors: yes
+
+    - name: save ios config
+      cisco.ios.ios_config:
+        save_when: always
+      ignore_errors: yes
+
+  - name: set syslog server nxos
+    hosts: nxos
+    gather_facts: no
+    tasks:
+
+    - name: set syslog server nxos
+      cisco.nxos.nxos_command:
+        commands:
+        - configure
+        - command: logging server {{ syslog_server }}
+      ignore_errors: yes
+
+    - name: save nxos config
+      cisco.nxos.nxos_config:
+        save_when: always
+      ignore_errors: yes
