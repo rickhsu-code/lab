@@ -1,0 +1,16 @@
+---
+
+- hosts: all
+  gather_facts: no
+
+  tasks:
+    - name: ADD a new EPG
+      cisco.aci.aci_epg:
+        hostname: '{{ inventory_hostname }}'
+        validate_certs: no
+        tenant: tn_ansible_awx_test
+        ap: anp_ansible_awx_test
+        epg: epg_ansible_awx_test
+        bd: bd_178-178-178-000
+        state: present
+      delegate_to: localhost
