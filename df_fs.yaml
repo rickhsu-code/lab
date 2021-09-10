@@ -9,4 +9,4 @@
      register: dffs
 
   -  debug:
-       msg: "System {{ inventory_hostname }}'s {{ FS_MOUNTP
+       msg: "System {{ inventory_hostname }}'s {{ FS_MOUNTPOINT }} FS utiliation is {{ dffs.stdout }}"
