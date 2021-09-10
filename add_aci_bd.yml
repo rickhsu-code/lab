@@ -1,0 +1,15 @@
+---
+
+- hosts: all
+  gather_facts: no
+
+  tasks:
+    - name: ADD a new BD
+      cisco.aci.aci_bd:
+        hostname: '{{ inventory_hostname }}'
+        validate_certs: no
+        tenant: tn_ansible_awx_test
+        bd: bd_178-178-178-000
+        vrf: vrf_ansible_awx_test
+        state: present
+      delegate_to: localhost
