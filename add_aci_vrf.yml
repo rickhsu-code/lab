@@ -1,0 +1,14 @@
+---
+
+- hosts: all
+  gather_facts: no
+
+  tasks:
+    - name: ADD a new VRF
+      cisco.aci.aci_vrf:
+        hostname: '{{ inventory_hostname }}'
+        validate_certs: no
+        tenant: tn_ansible_awx_test
+        vrf: vrf_ansible_awx_test
+        state: present
+      delegate_to: localhost
