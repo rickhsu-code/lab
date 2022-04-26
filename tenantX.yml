@@ -1,0 +1,56 @@
+---
+
+tenant_name: "LabX_tn"
+vrf_name: "LabX_vrf"
+
+bds:
+  - { name: "Vlan1X20_BD", gw: "172.31.0.14", cidr: "28", scope: "public", l3out: "LabX_l3out"}
+  - { name: "Vlan1X21_BD", gw: "172.31.0.30", cidr: "28", scope: "public", l3out: "LabX_l3out"}
+  - { name: "Firewall_BD", gw: "172.31.0.46", cidr: "28", scope: "public", l3out: "LabX_l3out"}
+
+l3out:
+  - { name: "LabX_l3out", dom: "LabX_External_Routed_PHY", l3proto: "bgp" }
+
+NodeProfile_name: "NodeProfile"
+NodeProfile:
+  - { routerId: "10.7.1.101", pod: "1", node: "101" }
+  - { routerId: "10.7.1.102", pod: "1", node: "102" }
+  - { routerId: "10.7.1.201", pod: "2", node: "201" }
+  - { routerId: "10.7.1.202", pod: "2", node: "202" }
+
+l3outLogicalInterfaceProfile:
+  - { name: "InterProfile101", addr: "172.16.0.61/31", encap: "vlan-1700", pod: "1", node: "101", path: "eth1/33", proto: "bgp", peer: "172.16.0.60", localasn: "107", remoteasn: "65100" }
+  - { name: "InterProfile102", addr: "172.16.0.63/31", encap: "vlan-1700", pod: "1", node: "102", path: "eth1/33", proto: "bgp", peer: "172.16.0.62", localasn: "107", remoteasn: "65100" }
+  - { name: "InterProfile201", addr: "172.16.0.65/31", encap: "vlan-1700", pod: "2", node: "201", path: "eth1/33", proto: "bgp", peer: "172.16.0.64", localasn: "107", remoteasn: "65100" }
+  - { name: "InterProfile202", addr: "172.16.0.67/31", encap: "vlan-1700", pod: "2", node: "202", path: "eth1/33", proto: "bgp", peer: "172.16.0.66", localasn: "107", remoteasn: "65100" }
+
+l3out_extepg:
+  - { name: "LabX_ExtEPG", subnet: "0.0.0.0/0"}
+
+anps:
+  - { name: "NetworkCentric_ANP" }
+  - { name: "App1_ANP" }
+  - { name: "App2_ANP" }
+
+anp_epgs:
+  - { name: "NetworkCentric_ANP", epg: "Vlan1X20_EPG", bd: "Vlan1X20_BD" }
+  - { name: "NetworkCentric_ANP", epg: "Vlan1X21_EPG", bd: "Vlan1X21_BD" }
+  - { name: "App1_ANP", epg: "Web1_EPG", bd: "Vlan1X20_BD" }
+  - { name: "App1_ANP", epg: "Db1_EPG", bd: "Vlan1X20_BD" }
+  - { name: "App2_ANP", epg: "Web2_EPG", bd: "Vlan1X21_BD" }
+  - { name: "App2_ANP", epg: "Db2_EPG", bd: "Vlan1X21_BD" }
+
+epg_doms:
+  - { ap: "NetworkCentric_ANP", epg: "Vlan1X20_EPG", dom: "LabX_Legacy_PHY", type: "phys" }
+  - { ap: "NetworkCentric_ANP", epg: "Vlan1X21_EPG", dom: "LabX_Legacy_PHY", type: "phys" }
+
+epg_static_binding:
+  - { ap: "NetworkCentric_ANP", epg: "Vlan1X20_EPG", encap: "1720", ifmode: "trunk", iftype: "vpc", pod: "1", leaf: "101-102", if: "LabShared_vPC-to-N9K_IPG" }
+
+contracts:
+  - { name: "vzAny", sub: "subject", filter: "Any"}
+  - { name: "web-to-db", sub: "subject", filter: "Mysql"}
+
+contract_filters:
+  - { filter: "Any", entry: "IP", ether: "ip", proto: "unspecified", dport: "unspecified" }
+  - { filter: "Mysql", entry: "IP", ether: "ip", proto: "tcp", dport: "3306" }

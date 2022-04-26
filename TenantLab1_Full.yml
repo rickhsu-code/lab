@@ -1,0 +1,359 @@
+---
+- name: ENSURE APPLICATION CONFIGURATION EXISTS
+  hosts: ctbcstaging
+  connection: local
+  gather_facts: False
+
+  tasks:
+    - name: Add tenant
+      aci_tenant:
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+        tenant: Lab1_TN
+        description: tenant create with ansible
+        state: present
+      tags:
+      - TN
+
+    - name: Add vrf
+      aci_vrf:
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+        vrf: Lab1_VRF
+        tenant: Lab1_TN
+        descr: vrf create with ansible
+        state: present
+      tags:
+      - VRF
+
+    - name: Add new ANP Network Centric
+      aci_ap:
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+        tenant: Lab1_TN
+        ap: "NetworkCentric_ANP"
+        descr: ANP create with ansible
+        state: present
+      tags:
+      - ANP
+
+    - name: Add new ANP Application Centric
+      aci_ap:
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+        tenant: Lab1_TN
+        ap: "{{ item.ap }}"
+        state: present
+      loop:
+        - { ap: "App1_ANP"}
+        - { ap: "App2_ANP"}
+      tags:
+      - ANP
+
+    - name: Add Bridge Domain
+      aci_bd:
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+        tenant: Lab1_TN
+        bd: "{{ item.bd }}"
+        vrf: Lab1_VRF
+        enable_routing: yes
+        description: Created with ansible
+        state: present
+      loop:
+        - { bd: "Vlan1120_BD"}
+        - { bd: "Vlan1121_BD"}
+        - { bd: "Firewall_BD"}
+      tags:
+      - BD
+
+    - name: Add subnet to bd l3
+      aci_bd_subnet:
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+        tenant: Lab1_TN
+        scope: "{{ item.scope }}"
+        bd: "{{ item.bd }}"
+        gateway: "{{ item.gw }}"
+        mask: "{{ item.cidr }}"
+        state: present
+      loop:
+        - {bd: "Vlan1120_BD", gw: "10.228.1.14", cidr: "28", scope: "public" }
+        - {bd: "Vlan1121_BD", gw: "10.228.1.30", cidr: "28", scope: "public" }
+        - {bd: "Firewall_BD", gw: "10.228.1.46", cidr: "28", scope: "public" }
+      tags:
+      - BD
+
+    - name: bind l3out to bd l3
+      aci_bd_to_l3out:
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+        tenant: Lab1_TN
+        l3out: "{{ item.l3out }}"
+        bd: "{{ item.bd }}"
+        state: present
+      loop:
+        - {bd: "Firewall_BD", l3out: "Lab1_L3out" }
+        - {bd: "Vlan1120_BD", l3out: "Lab1_L3out" }
+        - {bd: "Vlan1121_BD", l3out: "Lab1_L3out" }
+      tags:
+      - BD
+
+    - name: Add EPGs to ANP
+      aci_epg:
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+        tenant: Lab1_TN
+        ap: "{{ item.ap }}"
+        epg: "{{ item.epg }}"
+        bd: "{{ item.bd }}"
+        state: present
+      loop:
+        - { ap: "NetworkCentric_ANP", bd: "Vlan1120_BD", epg: "Vlan1120_EPG" }
+        - { ap: "NetworkCentric_ANP", bd: "Vlan1121_BD", epg: "Vlan1121_EPG" }
+        - { ap: "App1_ANP", bd: "Vlan1120_BD", epg: "Web1_EPG" }
+        - { ap: "App1_ANP", bd: "Vlan1120_BD", epg: "Db1_EPG" }
+        - { ap: "App2_ANP", bd: "Vlan1121_BD", epg: "Web2_EPG" }
+        - { ap: "App2_ANP", bd: "Vlan1121_BD", epg: "Db2_EPG" }
+      tags:
+      - EPG
+
+    - name: Add Static Binding for EPG
+      aci_static_binding_to_epg:
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+        tenant: Lab1_TN
+        ap: "{{ item.ap }}"
+        epg: "{{ item.epg }}"
+        encap_id: "{{ item.encap }}"
+        deploy_immediacy: "lazy"
+        interface_mode: "{{ item.ifmode }}"
+        interface_type: "{{ item.iftype }}"
+        pod_id: "{{ item.pod }}"
+        leafs: "{{ item.leaf }}"
+        interface: "{{ item.if }}"
+        state: present
+      loop:
+        - { ap: "NetworkCentric_ANP", epg: "Vlan1120_EPG", encap: "1120", ifmode: "trunk", iftype: "switch_port", pod: "1", leaf: "101", if: "1/17" }
+        - { ap: "NetworkCentric_ANP", epg: "Vlan1121_EPG", encap: "1121", ifmode: "trunk", iftype: "switch_port", pod: "1", leaf: "101", if: "1/17" }
+        - { ap: "NetworkCentric_ANP", epg: "Vlan1120_EPG", encap: "1120", ifmode: "trunk", iftype: "vpc", pod: "1", leaf: "101-102", if: "LabShared_vPC-to-N9K_IPG" }
+        - { ap: "NetworkCentric_ANP", epg: "Vlan1121_EPG", encap: "1121", ifmode: "trunk", iftype: "vpc", pod: "1", leaf: "101-102", if: "LabShared_vPC-to-N9K_IPG" }
+      tags:
+      - EPG
+
+    - name: Add Dom to EPGs
+      aci_epg_to_domain:
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+        tenant: Lab1_TN
+        ap: "{{ item.ap }}"
+        epg: "{{ item.epg }}"
+        domain: "{{ item.dom }}"
+        domain_type: "{{ item.type }}"
+        state: present
+      loop:
+        - { ap: "NetworkCentric_ANP", dom: "Lab1_Legacy_PHY", type: "phys", epg: "Vlan1120_EPG" }
+        - { ap: "NetworkCentric_ANP", dom: "Lab1_Legacy_PHY", type: "phys", epg: "Vlan1121_EPG" }
+
+    - name: Create contract
+      aci_contract:
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+        tenant: Lab1_TN
+        contract: "{{ item.name }}"
+        description: "create with ansible"
+        scope: context
+      loop:
+        - { name: "vzAny" }
+        - { name: "web-to-db" }
+      tags:
+      - CONTRACT
+
+    - name: Create contract subj
+      aci_contract_subject:
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+        tenant: Lab1_TN
+        contract: "{{ item.name }}"
+        subject: "{{ item.sub }}"
+        description: "create with ansible"
+      loop:
+        - { name: "vzAny", sub: "subject1" }
+        - { name: "web-to-db", sub: "subject1" }
+      tags:
+      - CONTRACT
+
+    - name: Create contract subj filter
+      aci_contract_subject_to_filter:
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+        tenant: Lab1_TN
+        contract: "{{ item.name }}"
+        subject: "{{ item.sub }}"
+        filter: "{{ item.filter }}"
+      loop:
+        - { name: "vzAny", sub: "subject1", filter: "Any"}
+        - { name: "web-to-db", sub: "subject1", filter: "Mysql"}
+      tags:
+      - CONTRACT
+
+    - name: Create  filter
+      aci_filter:
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+        tenant: Lab1_TN
+        filter: "{{ item.filter }}"
+        description: "create with ansible"
+      loop:
+        - { filter: "Any"}
+        - { filter: "Mysql"}
+      tags:
+      - CONTRACT
+
+    - name: Create entry to filter
+      aci_filter_entry:
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+        tenant: Lab1_TN
+        filter: "{{ item.filter }}"
+        entry: "{{ item.entry }}"
+        ether_type: "{{ item.ether }}"
+        ip_protocol: "{{ item.proto }}"
+        dst_port: "{{ item.dport }}"
+        description: "create with ansible"
+      loop:
+        - { filter: "Any", entry: "IP", ether: "ip", proto: "unspecified", dport: "unspecified"}
+        - { filter: "Mysql", entry: "tcp-3306", ether: "ip", proto: "tcp", dport: "3306"}
+      tags:
+      - CONTRACT
+
+    - name: Add L3out
+      aci_l3out:
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+        tenant: Lab1_TN
+        name: "{{ item.name }}"
+        description: "created with ansible"
+        vrf: "Lab1_VRF"
+        domain: "{{ item.dom }}"
+        l3protocol: "{{ item.l3proto }}"
+        route_control: "export"
+        state: present
+      loop:
+        - { name: "Lab1_L3out", dom: "Lab1_External_Routed_PHY", l3proto: "bgp" }
+      tags:
+      - L3OUT
+
+    - name: Add node profile to L3out
+      aci_rest:
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+        method: post
+        path: /api/mo/uni.xml
+        content:
+         '<fvTenant name="Lab1_TN">
+           <l3extOut name="Lab1_L3out">
+             <l3extLNodeP name="NodeProfile">
+               <l3extRsNodeL3OutAtt rtrId="1.1.1.101" rtrIdLoopBack="no" tDn="topology/pod-1/node-101"/>
+               <l3extRsNodeL3OutAtt rtrId="1.1.1.102" rtrIdLoopBack="no" tDn="topology/pod-1/node-102"/>
+               <l3extRsNodeL3OutAtt rtrId="1.1.1.201" rtrIdLoopBack="no" tDn="topology/pod-2/node-201"/>
+               <l3extRsNodeL3OutAtt rtrId="1.1.1.202" rtrIdLoopBack="no" tDn="topology/pod-2/node-202"/>
+               <l3extLIfP name="InterfaceProf101">
+                <l3extRsPathL3OutAtt addr="10.228.0.11/31" autostate="disabled" descr="" encap="vlan-1100" encapScope="local" ifInstT="sub-interface" ipv6Dad="enabled" mode="regular" mtu="inherit" tDn="topology/pod-1/paths-101/pathep-[eth1/33]" targetDscp="unspecified">
+                  <bgpPeerP addr="10.228.0.10" allowedSelfAsCnt="3" annotation="" ctrl="send-com,send-ext-com" descr="" name="" nameAlias="" peerCtrl="" privateASctrl="" ttl="1" weight="0">
+                    <bgpRsPeerPfxPol tnBgpPeerPfxPolName=""/>
+                    <bgpAsP annotation="" asn="65100"/>
+                    <bgpLocalAsnP annotation="" localAsn="101"/>
+                  </bgpPeerP>
+                </l3extRsPathL3OutAtt>
+               </l3extLIfP>
+               <l3extLIfP name="InterfaceProf102">
+                <l3extRsPathL3OutAtt addr="10.228.0.13/31" autostate="disabled" descr="" encap="vlan-1100" encapScope="local" ifInstT="sub-interface" ipv6Dad="enabled" mode="regular" mtu="inherit" tDn="topology/pod-1/paths-102/pathep-[eth1/33]" targetDscp="unspecified">
+                  <bgpPeerP addr="10.228.0.12" allowedSelfAsCnt="3" annotation="" ctrl="send-com,send-ext-com" descr="" name="" nameAlias="" peerCtrl="" privateASctrl="" ttl="1" weight="0">
+                    <bgpRsPeerPfxPol tnBgpPeerPfxPolName=""/>
+                    <bgpAsP annotation="" asn="65100"/>
+                    <bgpLocalAsnP annotation="" localAsn="101"/>
+                  </bgpPeerP>
+                </l3extRsPathL3OutAtt>
+               </l3extLIfP>
+               <l3extLIfP name="InterfaceProf201">
+                <l3extRsPathL3OutAtt addr="10.228.0.15/31" autostate="disabled" descr="" encap="vlan-1100" encapScope="local" ifInstT="sub-interface" ipv6Dad="enabled" mode="regular" mtu="inherit" tDn="topology/pod-2/paths-201/pathep-[eth1/33]" targetDscp="unspecified">
+                  <bgpPeerP addr="10.228.0.14" allowedSelfAsCnt="3" annotation="" ctrl="send-com,send-ext-com" descr="" name="" nameAlias="" peerCtrl="" privateASctrl="" ttl="1" weight="0">
+                    <bgpRsPeerPfxPol tnBgpPeerPfxPolName=""/>
+                    <bgpAsP annotation="" asn="65100"/>
+                    <bgpLocalAsnP annotation="" localAsn="101"/>
+                  </bgpPeerP>
+                </l3extRsPathL3OutAtt>
+               </l3extLIfP>
+               <l3extLIfP name="InterfaceProf202">
+                <l3extRsPathL3OutAtt addr="10.228.0.17/31" autostate="disabled" descr="" encap="vlan-1100" encapScope="local" ifInstT="sub-interface" ipv6Dad="enabled" mode="regular" mtu="inherit" tDn="topology/pod-2/paths-202/pathep-[eth1/33]" targetDscp="unspecified">
+                  <bgpPeerP addr="10.228.0.16" allowedSelfAsCnt="3" annotation="" ctrl="send-com,send-ext-com" descr="" name="" nameAlias="" peerCtrl="" privateASctrl="" ttl="1" weight="0">
+                    <bgpRsPeerPfxPol tnBgpPeerPfxPolName=""/>
+                    <bgpAsP annotation="" asn="65100"/>
+                    <bgpLocalAsnP annotation="" localAsn="101"/>
+                  </bgpPeerP>
+                </l3extRsPathL3OutAtt>
+               </l3extLIfP>
+             </l3extLNodeP>
+            <l3extInstP floodOnEncap="disabled" matchT="AtleastOne" name="Lab1_ExtEPG" prefGrMemb="exclude" prio="unspecified" targetDscp="unspecified">
+              <l3extSubnet aggregate="" annotation="" descr="" ip="0.0.0.0/0" scope="import-security"/>
+            </l3extInstP>
+           </l3extOut>
+         </fvTenant>'
+      tags:
+      - EXTEPG
+      - L3OUT
+
+    - name: Add contract vzAny
+      aci_rest:
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+        method: post
+        path: /api/mo/uni.xml
+        content:
+         '<fvTenant name="Lab1_TN">
+           <fvCtx name="Lab1_VRF">
+              <vzAny dn="uni/tn-Lab1_TN/ctx-Lab1_VRF/any" matchT="AtleastOne" prefGrMemb="disabled">
+                <vzRsAnyToProv matchT="AtleastOne" prio="unspecified" tnVzBrCPName="vzAny"/>
+                <vzRsAnyToCons prio="unspecified" tnVzBrCPName="vzAny"/>
+              </vzAny>
+           </fvCtx>
+         </fvTenant>'
+      tags:
+      - VRF

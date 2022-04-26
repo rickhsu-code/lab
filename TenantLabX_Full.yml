@@ -1,0 +1,281 @@
+---
+- name: ENSURE APPLICATION CONFIGURATION EXISTS
+  hosts: apic_cxlabs
+  connection: local
+  gather_facts: False
+  vars_files:
+    - ./tenantX.yml
+
+  vars:
+    aci_login: &aci_login
+        host: "{{ inventory_hostname }}"
+        username: "{{ aci_username }}"
+        password: "{{ aci_password }}"
+        validate_certs: False
+
+  tasks:
+    - name: Add tenant
+      aci_tenant:
+        <<: *aci_login
+        tenant: "{{ tenant_name }}"
+        description: tenant create with ansible
+        state: present
+      tags:
+      - TN
+
+    - name: Add vrf
+      aci_vrf:
+        <<: *aci_login
+        vrf: "{{ vrf_name }}"
+        tenant: "{{ tenant_name }}"
+        descr: vrf create with ansible
+        state: present
+      tags:
+      - VRF
+
+    - name: Add new ANP Network Centric
+      aci_ap:
+        <<: *aci_login
+        tenant: "{{ tenant_name }}"
+        ap: "{{ item.name }}"
+        descr: ANP create with ansible
+        state: present
+      loop: "{{ anps }}"
+      tags:
+      - ANP
+
+    - name: Add Bridge Domain
+      aci_bd:
+        <<: *aci_login
+        tenant: "{{ tenant_name }}"
+        bd: "{{ item.name }}"
+        vrf: "{{ vrf_name }}"
+        enable_routing: yes
+        description: Created with ansible
+        state: present
+      loop: "{{ bds }}"
+      tags:
+      - BD
+
+    - name: Add L3out
+      aci_l3out:
+        <<: *aci_login
+        tenant: "{{ tenant_name }}"
+        name: "{{ item.name }}"
+        description: "created with ansible"
+        vrf: "{{ vrf_name }}"
+        domain: "{{ item.dom }}"
+        l3protocol: "{{ item.l3proto }}"
+        route_control: "export"
+        state: present
+      loop: "{{ l3out }}"
+      tags:
+      - L3OUT
+
+    - name: Add subnet to bd l3
+      aci_bd_subnet:
+        <<: *aci_login
+        tenant: "{{ tenant_name }}"
+        scope: "{{ item.scope }}"
+        bd: "{{ item.name }}"
+        gateway: "{{ item.gw }}"
+        mask: "{{ item.cidr }}"
+        state: present
+      loop: "{{ bds }}"
+      tags:
+      - BD
+
+    - name: bind l3out to bd l3
+      aci_bd_to_l3out:
+        <<: *aci_login
+        tenant: "{{ tenant_name }}"
+        l3out: "{{ item.l3out }}"
+        bd: "{{ item.name }}"
+        state: present
+      loop: "{{ bds}}"
+      tags:
+      - BD
+
+    - name: Add EPGs to ANP
+      aci_epg:
+        <<: *aci_login
+        tenant: "{{ tenant_name }}"
+        ap: "{{ item.name }}"
+        epg: "{{ item.epg }}"
+        bd: "{{ item.bd }}"
+        state: present
+      loop: "{{ anp_epgs }}"
+      tags:
+      - EPG
+
+    - name: Add Static Binding for EPG
+      aci_static_binding_to_epg:
+        <<: *aci_login
+        tenant: "{{ tenant_name }}"
+        ap: "{{ item.ap }}"
+        epg: "{{ item.epg }}"
+        encap_id: "{{ item.encap }}"
+        deploy_immediacy: "lazy"
+        interface_mode: "{{ item.ifmode }}"
+        interface_type: "{{ item.iftype }}"
+        pod_id: "{{ item.pod }}"
+        leafs: "{{ item.leaf }}"
+        interface: "{{ item.if }}"
+        state: present
+      loop: "{{ epg_static_binding }}"
+      tags:
+      - EPG
+
+    - name: Add Dom to EPGs
+      aci_epg_to_domain:
+        <<: *aci_login
+        tenant: "{{ tenant_name }}"
+        ap: "{{ item.ap }}"
+        epg: "{{ item.epg }}"
+        domain: "{{ item.dom }}"
+        domain_type: "{{ item.type }}"
+        state: present
+      loop: "{{ epg_doms }}"
+      tags:
+      - EPG
+
+    - name: Create contract
+      aci_contract:
+        <<: *aci_login
+        tenant: "{{ tenant_name }}"
+        contract: "{{ item.name }}"
+        description: "create with ansible"
+        scope: context
+      loop: "{{ contracts }}"
+      tags:
+      - CONTRACT
+
+    - name: Create contract subj
+      aci_contract_subject:
+        <<: *aci_login
+        tenant: "{{ tenant_name }}"
+        contract: "{{ item.name }}"
+        subject: "{{ item.sub }}"
+        description: "create with ansible"
+      loop: "{{ contracts }}"
+      tags:
+      - CONTRACT
+
+    - name: Create contract subj filter
+      aci_contract_subject_to_filter:
+        <<: *aci_login
+        tenant: "{{ tenant_name }}"
+        contract: "{{ item.name }}"
+        subject: "{{ item.sub }}"
+        filter: "{{ item.filter }}"
+      loop: "{{ contracts }}"
+      tags:
+      - CONTRACT
+
+    - name: Create  filter
+      aci_filter:
+        <<: *aci_login
+        tenant: "{{ tenant_name }}"
+        filter: "{{ item.filter }}"
+        description: "create with ansible"
+      loop: "{{ contract_filters }}"
+      tags:
+      - CONTRACT
+
+    - name: Create entry to filter
+      aci_filter_entry:
+        <<: *aci_login
+        tenant: "{{ tenant_name }}"
+        filter: "{{ item.filter }}"
+        entry: "{{ item.entry }}"
+        ether_type: "{{ item.ether }}"
+        ip_protocol: "{{ item.proto }}"
+        dst_port: "{{ item.dport }}"
+        description: "create with ansible"
+      loop: "{{ contract_filters }}"
+      tags:
+      - CONTRACT
+
+    - name: Add node profile to L3out
+      aci_rest:
+        <<: *aci_login
+        method: post
+        path: /api/mo/uni.xml
+        content: 
+         '<fvTenant name="{{ tenant_name }}">
+           <l3extOut name="{{ l3out[0].name }}">
+             <l3extLNodeP name="{{ NodeProfile_name }}">
+                {% for NodeId in NodeProfile %}
+                <l3extRsNodeL3OutAtt rtrId="{{ NodeId.routerId }}" rtrIdLoopBack="no" tDn="topology/pod-{{ NodeId.pod }}/node-{{ NodeId.node}}"/>
+                {% endfor %}
+             </l3extLNodeP>
+           </l3extOut>
+         </fvTenant>'
+      tags:
+      - EXTEPG
+      - L3OUT
+
+    - name: Add ExtEPG to L3out
+      aci_rest:
+        <<: *aci_login
+        method: post
+        path: /api/mo/uni.xml
+        content:
+         '<fvTenant name="{{ tenant_name }}">
+          <l3extOut name="{{ l3out[0].name }}">
+             {% for extEPG in l3out_extepg %}
+            <l3extInstP floodOnEncap="disabled" matchT="AtleastOne" name="{{ extEPG.name }}" prefGrMemb="exclude" prio="unspecified" targetDscp="unspecified">
+               <l3extSubnet aggregate="" annotation="" descr="" ip="{{ extEPG.subnet }}" scope="import-security"/>
+            </l3extInstP>
+             {% endfor %}
+           </l3extOut>
+         </fvTenant>'
+      tags:
+      - EXTEPG
+      - L3OUT
+
+    - name: Add logical interface profile to L3out
+      aci_rest:
+        <<: *aci_login
+        method: post
+        path: /api/mo/uni.xml
+        content:
+         '<fvTenant name="{{ tenant_name }}">
+           <l3extOut name="{{ l3out[0].name }}">
+             <l3extLNodeP name="{{ NodeProfile_name }}">
+               {% for lip in l3outLogicalInterfaceProfile %}
+                 <l3extLIfP name="{{ lip.name }}">
+                    <l3extRsPathL3OutAtt addr="{{ lip.addr }}" autostate="disabled" descr="" encap="{{ lip.encap }}" encapScope="local" ifInstT="sub-interface" ipv6Dad="enabled" mode="regular" mtu="inherit" tDn="topology/pod-{{ lip.pod }}/paths-{{ lip.node }}/pathep-[{{ lip.path }}]" targetDscp="unspecified">
+                     {% if lip.proto == "bgp" %}
+                       <bgpPeerP addr="{{ lip.peer }}" allowedSelfAsCnt="3" annotation="" ctrl="send-com,send-ext-com" descr="" name="" nameAlias="" peerCtrl="" privateASctrl="" ttl="1" weight="0">
+                         <bgpRsPeerPfxPol tnBgpPeerPfxPolName=""/>
+                         <bgpAsP annotation="" asn="{{ lip.remoteasn}}"/>
+                         <bgpLocalAsnP annotation="" localAsn="{{ lip.localasn }}"/>
+                       </bgpPeerP>
+                         {% endif %}
+                    </l3extRsPathL3OutAtt>
+                 </l3extLIfP>
+                   {% endfor %}
+             </l3extLNodeP>
+           </l3extOut>
+         </fvTenant>'
+      tags:
+      - EXTEPG
+      - L3OUT
+
+    - name: Add contract vzAny
+      aci_rest:
+        <<: *aci_login
+        method: post
+        path: /api/mo/uni.xml
+        content:
+         '<fvTenant name="{{ tenant_name }}">
+           <fvCtx name="{{ vrf_name }}">
+              <vzAny dn="uni/tn-{{ tenant_name}}/ctx-{{ vrf_name}}/any" matchT="AtleastOne" prefGrMemb="disabled">
+                <vzRsAnyToProv matchT="AtleastOne" prio="unspecified" tnVzBrCPName="{{ contracts[0].name }}"/>
+                <vzRsAnyToCons prio="unspecified" tnVzBrCPName="{{ contracts[0].name }}"/>
+              </vzAny>
+           </fvCtx>
+         </fvTenant>'
+      tags:
+      - VRF
