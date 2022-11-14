@@ -1,11 +1,16 @@
-pipeline:
-  build:
-    image: golang:${GO_VERSION}
+---
+kind: pipeline
+name: build
+
+steps:
+  - name: build
+    image: golang:1.7
+    environment:
+      USERNAME:
+        from_secret: username
     commands:
       - go get
       - go build
       - go test
-    matrix:
-      GO_VERSION:
-        - 1.7
-        - 1.6
+      - echo $USERNAME > a.txt
+      - cat a.txt 
